@@ -250,7 +250,7 @@ class WumpusTextHMI:
         self.draw_contours = True
         self.LOGGER_TIME_STEP = (my_args["--verbose"]=="True")
         self.DISPLAY = (my_args["--display"]=="True")
-        self.agent = Agent()
+        self.agent = agent
         self.reset()
         self.environment = Environment(self.agent,my_args)
         self.agent_prev_pos = self.agent.getPosition()
