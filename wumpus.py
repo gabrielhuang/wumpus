@@ -1,32 +1,57 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+# README !!!
+# This version doesn't use a graphical interface (to avoid compatibility issues) and was tested under Python 2.7.6 and under Python 3.4.3.
+# You need to install numpy, docopt (and enum34 if under Python 2.7.*).
+# This can be done with the following commands (in a terminal in a Linux OS):
+#   If running Python 2:
+#    pip install numpy
+#    pip install docopt
+#    pip install enum34
+#   If running Python 3:
+#    pip3 install numpy
+#    pip3 install docopt
+# For this, 'pip' (or pip3) needs to be installed (which is usually already the case). If not, you can do it by installing classically python-dev (for pip) or python3-pip (for pip3), with your usual OS library management tool: yum, aptitude...).
+
 """
 A simple program for studying RL algorithm on the Wumpus world 
 CeCILL License
 
-created by Gaetan Marceau Caron [01/02/2016]
+created by Gaetan Marceau Caron   [01/02/2016]
+and updated by Guillaume Charpiat [24/02/2016]
             
-Usage: wumpus [-i <flag>] [-t <flag>] [-w <flag>] [-v <flag>] [-g <size>] [-n <int>] [-e <int>]
+Usage: wumpus [-i <flag>] [-t <flag>] [-w <flag>] [-v <flag>] [-d <flag>] [-g <size>] [-n <int>] [-e <int>]
 
 Options:
 -h --help      Show the description of the program
 -i <flag> --hmi <flag>  a flag for activating the graphical interface [default: True]
 -t <flag> --tore <flag>  a flag for choosing the tore grid [default: True]
--w <flag> --wumpus_dyn <flag>  a flag for activating thw Wumpus moves (beware!) [default: False]
+-w <flag> --wumpus_dyn <flag>  a flag for activating the Wumpus moves (beware!) [default: False]
 -v <flag> --verbose <flag>  a flag for activating the verbose mode [default: True]
+-d <flag> --display <flag>  a flag for activating the display [default: True]
 -g <size> --grid_size <size>  an integer for the grid size [default: 4] 
 -n <int> --n_flash <int>  an integer for the number of power units [default: 5] 
 -e <int> --max_n_episode <int>  the maximum number of episode [default: 100]
 """
 
-from tkinter import * 
-from PIL import Image, ImageTk
+from __future__ import print_function
+
+import sys
+#from tkinter import * 
+#from PIL import Image, ImageTk
 import numpy as np
 from time import sleep
 from enum import IntEnum, unique
-
 from docopt import docopt
+
+message = ""
+
+def flush_message():
+    global message
+    sys.stdout.write(message)
+    message = ""
+
 
 @unique
 class Action(IntEnum):
@@ -38,6 +63,7 @@ class Action(IntEnum):
     FLASH_DOWN = 6
     FLASH_LEFT = 7
     FLASH_RIGHT = 8
+
 
 class Agent:
     def __init__(self):
@@ -57,6 +83,7 @@ class Agent:
 
     def nextState(self,s,reward):
         self.state_ = s
+
 
 class Environment:
 
@@ -83,9 +110,11 @@ class Environment:
         init_state = self.getInitState()
         self.agent.nextState(init_state, 0.)
         self.wumpus_pos_ = [1,2]
+        print("\n **** New start **** \n")
 
     def getInitState(self):
-        return [0,0,0,0,self.DEFAULT_N_FLASH]
+        return [0,0,0,0,self.DEFAULT_N_FLASH]    
+        # An agent state is : (x coordinate, y coordinate, smell the Wumpus?, feel breeze?, remaining number of shots)
         
     def getGridSize(self):
         return self.grid_size_
@@ -156,12 +185,16 @@ class Environment:
         return False
 
     def testForEnd(self, s):
+        global message
         agent_pos = s[:2]
         if self.wumpus_pos_[0] == agent_pos[0] and self.wumpus_pos_[1] == agent_pos[1]:
-            return (self.WUMPUS_REWARD, True)
+            message += "\n ---- Met the Wumpus... and died ---- \n"
+            return (self.WUMPUS_REWARD, True) 
         elif self.hole_pos_[0] == agent_pos[0] and self.hole_pos_[1] == agent_pos[1]:
+            message += "\n ---- Stepped in a hole... and died ---- \n"
             return (self.HOLE_REWARD, True)
         elif self.treasure_pos_[0] == agent_pos[0] and self.treasure_pos_[1] == agent_pos[1]:
+            message += "\n ---- Found the treasure ! ---- \n"
             return (self.TREASURE_REWARD, True)
         else:
             return (0, False)
@@ -178,6 +211,7 @@ class Environment:
         a = self.agent.getAction()
         s = self.agent.getState()
         reward = self.DEFAULT_REWARD
+        global message
         
         next_agent_pos = s[:2]
         n_flash = s[-1]
@@ -189,6 +223,7 @@ class Environment:
                 flash_success = self.flashAgent(s, a)
                 if flash_success:
                     reward += self.KILL_REWARD
+                    message += "\n ---- Killed the Wumpus ! ---- \n"
             
         sense = self.updateSense(next_agent_pos)
         new_state = next_agent_pos+sense+[n_flash]
@@ -199,93 +234,73 @@ class Environment:
         
         return (new_state, a, reward+end_reward, end_flag)
         
-class WumpusHMI(Tk):
+
+
+
+# Platform with display in text mode (in terminal)
+
+class WumpusTextHMI:
 
     def __init__(self, my_args=None):
-        super().__init__()
-        self.title("Wumpus world")
         self.DELTA_TIME = 1
-        self.IMG_SIZE = 150
+        self.char_per_box = 1
+        self.draw_contours = True
         self.LOGGER_TIME_STEP = (my_args["--verbose"]=="True")
+        self.DISPLAY = (my_args["--display"]=="True")
         self.agent = Agent()
         self.reset()
         self.environment = Environment(self.agent,my_args)
         self.agent_prev_pos = self.agent.getPosition()
         self.wumpus_prev_pos = self.environment.getWumpusPosition()
         self.loadImages()
-        self.createWorld()
+        if (self.DISPLAY):
+            self.displayWorld()
 
     def loadImages(self):
-        image = Image.open("./img/wumpus.gif")
-        image = image.resize((self.IMG_SIZE, self.IMG_SIZE), Image.ANTIALIAS)
-        self.image_wumpus = ImageTk.PhotoImage(image)
-        
-        image = Image.open("./img/black.gif")
-        image = image.resize((self.IMG_SIZE, self.IMG_SIZE), Image.ANTIALIAS)
-        self.image_hole = ImageTk.PhotoImage(image)
-        
-        image = Image.open("./img/papers.gif")
-        image = image.resize((self.IMG_SIZE, self.IMG_SIZE), Image.ANTIALIAS)
-        self.image_treasure = ImageTk.PhotoImage(image)
-        
-        image = Image.open("./img/einstein.gif")
-        image = image.resize((self.IMG_SIZE, self.IMG_SIZE), Image.ANTIALIAS)
-        self.image_hunter = ImageTk.PhotoImage(image)
+        self.image_wumpus = 'W'
+        self.image_hole = 'O'
+        self.image_treasure = '$'
+        self.image_hunter = '+'
 
     def convertCoord(self,pos):
         grid_size = self.environment.getGridSize()
         return (grid_size[1] - pos[1] - 1, pos[0])
-        
-    def createWorld(self):
+    
+    def displayWorld(self):
+        line_width = (self.char_per_box + 1) * self.environment.getGridSize()[1] + 1
+        horizontal_line =  '-' * line_width
+        print('\n')
+        if self.draw_contours:
+            print(horizontal_line)
+
         for line in range(self.environment.getGridSize()[0]):
+            if self.draw_contours:
+                sys.stdout.write('|')
             for col in range(self.environment.getGridSize()[1]):
-                canvas = Canvas(self, width=self.IMG_SIZE, height=self.IMG_SIZE, bg='grey')
-        
+                letter = ' '
+
                 if (line,col) == self.convertCoord(self.environment.getWumpusPosition()):
-                    canvas.create_image(0, 0, anchor=NW, image=self.image_wumpus)
+                    letter = self.image_wumpus
 
                 if (line,col) == self.convertCoord(self.environment.getHolePosition()):
-                    canvas.create_image(0, 0, anchor=NW, image=self.image_hole)
+                    letter = self.image_hole
 
                 if (line,col) == self.convertCoord(self.environment.getTreasurePosition()):
-                    canvas.create_image(0, 0, anchor=NW, image=self.image_treasure)
+                    letter = self.image_treasure
 
                 if (line,col) == self.convertCoord(self.agent.getPosition()):
-                    canvas.create_image(0, 0, anchor=NW, image=self.image_hunter)
-                canvas.grid(row=line, column=col)
+                    letter = self.image_hunter
 
-    def updateWorld(self):
-        for line in range(self.environment.getGridSize()[0]):
-            for col in range(self.environment.getGridSize()[1]):
-        
-                if (line,col) == self.convertCoord(self.agent.getPosition()):
-                    canvas = Canvas(self, width=self.IMG_SIZE, height=self.IMG_SIZE, bg='grey')
-                    canvas.create_image(0, 0, anchor=NW, image=self.image_hunter)
-                    canvas.grid(row=line, column=col)
+                sys.stdout.write(letter)
+                if self.draw_contours:
+                    sys.stdout.write('|')
 
-                elif (line,col) == self.convertCoord(self.agent_prev_pos[:2]):
-                    canvas = Canvas(self, width=self.IMG_SIZE, height=self.IMG_SIZE, bg='grey')
-                    if (line,col) == self.convertCoord(self.environment.getWumpusPosition()):
-                        canvas.create_image(0, 0, anchor=NW, image=self.image_wumpus)
-                    elif (line,col) == self.convertCoord(self.environment.getHolePosition()):
-                        canvas.create_image(0, 0, anchor=NW, image=self.image_hole)
-                    elif (line,col) == self.convertCoord(self.environment.getTreasurePosition()):
-                        canvas.create_image(0, 0, anchor=NW, image=self.image_treasure)                    
-                    canvas.grid(row=line, column=col)
+            sys.stdout.write('\n')
+            if self.draw_contours:
+                print(horizontal_line)
 
-                if self.environment.DYN_WUMPUS or (self.wumpus_prev_pos[0] == -1 and self.environment.getWumpusPosition()[0] > -1):
-                    if (line,col) == self.convertCoord(self.environment.getWumpusPosition()):
-                        canvas = Canvas(self, width=self.IMG_SIZE, height=self.IMG_SIZE, bg='grey')
-                        canvas.create_image(0, 0, anchor=NW, image=self.image_wumpus)
-                        canvas.grid(row=line, column=col)
+        sys.stdout.write('\n')
 
-                    elif (line,col) == self.convertCoord(self.wumpus_prev_pos):
-                        canvas = Canvas(self, width=self.IMG_SIZE, height=self.IMG_SIZE, bg='grey')
-                        if (line,col) == self.convertCoord(self.environment.getHolePosition()):
-                            canvas.create_image(0, 0, anchor=NW, image=self.image_hole)
-                        elif (line,col) == self.convertCoord(self.environment.getTreasurePosition()):
-                            canvas.create_image(0, 0, anchor=NW, image=self.image_treasure)                    
-                        canvas.grid(row=line, column=col)
                     
     def reset(self):
         self.time_step_ = 0
@@ -295,21 +310,30 @@ class WumpusHMI(Tk):
         self.agent_prev_pos = self.agent.getPosition()
         self.wumpus_prev_pos = self.environment.getWumpusPosition()
         prev_state = self.agent.getState()
-        (new_state, a, reward,end_flag) = self.environment.nextState()
+        (new_state, a, reward, end_flag) = self.environment.nextState()
         self.agent.nextState(new_state,reward)
 
         self.time_step_ += 1
         self.cumul_reward_ += reward
         if(self.LOGGER_TIME_STEP):
-            print("time step " + str(self.time_step_) + " " + str(prev_state) + " " + str(a) + " " + str(self.agent.getState()) + " " + str(self.cumul_reward_))
+            print("time step " + str(self.time_step_) + " : state " + str(prev_state) + " with " + str(a) + " ==> new state " + str(self.agent.getState()) + "; cumulated reward " + str(self.cumul_reward_))
+
+        if (self.DISPLAY):
+            flush_message()
 
         if(end_flag):
-            print("End of episode at time step " + str(self.time_step_) + " " + str(self.cumul_reward_))
+            print("\n **** End of episode at time step " + str(self.time_step_) + " " + str(self.cumul_reward_) + " ****")
             self.reset()
             self.environment.reset()
 
-        self.updateWorld()
-        ihm.after(self.DELTA_TIME, self.updateLoop)
+
+        if (self.DISPLAY):
+            sleep(1)   # only for human-intended display: to be removed to go faster
+            self.displayWorld()
+
+
+
+# Generic platform
 
 class RLPlatform:
 
@@ -340,19 +364,19 @@ class RLPlatform:
             self.reset()
             self.environment.reset()
 
+
+
 if __name__ == "__main__":
 
     # Retrieve the arguments from the command-line
     my_args = docopt(__doc__)
     print(my_args)
 
-    print(my_args["--hmi"])
-    
     if my_args["--hmi"]=="True":
-        ihm = WumpusHMI(my_args)
-        ihm.updateLoop()
-        ihm.mainloop()
+        platform = WumpusTextHMI(my_args)
     else:
-        rl_platform = RLPlatform(my_args)
-        for i in range(int(my_args["--max_n_episode"])):
-            rl_platform.updateLoop()
+        platform = RLPlatform(my_args)
+
+    for i in range(int(my_args["--max_n_episode"])):
+        platform.updateLoop()
+
