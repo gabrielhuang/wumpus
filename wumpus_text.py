@@ -49,6 +49,7 @@ from docopt import docopt
 import tp4
 
 message = ""
+silent = True  # indicate start/end of episodes
 
 def flush_message():
     global message
@@ -113,7 +114,8 @@ class Environment:
         init_state = self.getInitState()
         self.agent.nextState(init_state, 0.)
         self.wumpus_pos_ = [1,2]
-        print("\n **** New start **** \n")
+        if not silent:
+            print("\n **** New start **** \n")
 
     def getInitState(self):
         return [0,0,0,0,self.DEFAULT_N_FLASH]
@@ -258,6 +260,7 @@ class WumpusTextHMI:
         self.loadImages()
         if (self.DISPLAY):
             self.displayWorld()
+        self.total_reward = 0.
 
     def loadImages(self):
         self.image_wumpus = 'W'
@@ -318,6 +321,7 @@ class WumpusTextHMI:
 
         self.time_step_ += 1
         self.cumul_reward_ += reward
+        self.total_reward += reward
         if(self.LOGGER_TIME_STEP):
             print("time step " + str(self.time_step_) + " : state " + str(prev_state) + " with " + str(a) + " ==> new state " + str(self.agent.getState()) + "; cumulated reward " + str(self.cumul_reward_))
 
@@ -325,7 +329,8 @@ class WumpusTextHMI:
             flush_message()
 
         if(end_flag):
-            print("\n **** End of episode at time step " + str(self.time_step_) + " " + str(self.cumul_reward_) + " ****")
+            if not silent:
+                print("\n **** End of episode at time step " + str(self.time_step_) + " " + str(self.cumul_reward_) + " ****")
             self.reset()
             self.environment.reset()
 
@@ -346,6 +351,7 @@ class RLPlatform:
         self.reset()
         self.environment = Environment(self.agent,my_args)
         self.agent_prev_pos = self.agent.getPosition()
+        self.total_reward = 0.
 
     def reset(self):
         self.time_step_ = 0
@@ -359,11 +365,13 @@ class RLPlatform:
 
         self.time_step_ += 1
         self.cumul_reward_ += reward
+        self.total_reward += reward
         if(self.LOGGER_TIME_STEP):
             print("time step " + str(self.time_step_) + " " + str(prev_state) + " " + str(a) + " " + str(self.agent.getState()) + " " + str(self.cumul_reward_))
 
         if(end_flag):
-            print("End of episode at time step " + str(self.time_step_) + " " + str(self.cumul_reward_))
+            if not silent:
+                print("End of episode at time step " + str(self.time_step_) + " " + str(self.cumul_reward_))
             self.reset()
             self.environment.reset()
 
@@ -374,9 +382,18 @@ if __name__ == "__main__":
     # Retrieve the arguments from the command-line
     my_args = docopt(__doc__)
     print(my_args)
+    grid_size = int(my_args['--grid_size'])
+    n_flash = int(my_args['--n_flash'])
 
-    agent = Agent()
-    agent = tp4.EngineeredAgent()
+    # Choose an encoding
+    encoding = tp4.BSF(n_flash)
+    # encoding = tp4.ABSF(n_flash)
+    #encoding = tp4.XYBSF(grid_size, n_flash)
+
+    # Choose an agent
+    # agent = Agent()
+    # agent = tp4.EngineeredAgent()
+    agent = tp4.EpsilonGreedy(0.5, encoding)
 
     if my_args["--hmi"]=="True":
         platform = WumpusTextHMI(agent, my_args)
@@ -385,4 +402,7 @@ if __name__ == "__main__":
 
     for i in range(int(my_args["--max_n_episode"])):
         platform.updateLoop()
+
+    print ('Average reward/step: {}'.format(platform.total_reward
+        / float(int(my_args["--max_n_episode"]))))
 
