@@ -1,0 +1,14 @@
+##################################################################
+#########
+######### README Wumpus World
+#########
+##################################################################
+
+1. Prerequisite
+- Python 3
+- Tkinter
+- numpy
+- pillow (for the PIL library)
+
+2. Most options are available in the Environment constructor in CAPITAL LETTERS
+
