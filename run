@@ -1,9 +1,5 @@
 #!/usr/bin/env sh
 
-# Wumpus does not move
-#python wumpus_text.py --hmi=false --verbose=false -e 50000 --runs=3
-
 # Wumpus moves
-#python wumpus_text.py --hmi=false --wumpus_dyn=true --verbose=false -e 50000
-
-ipython -i wumpus_text.py -- --hmi=false --wumpus_dyn=true --verbose=false -e 10000 --runs=5
+python wumpus_text.py --hmi=false --wumpus_dyn=true --verbose=false -e 10000 --runs=5
+#ipython -i wumpus_text.py -- --hmi=false --wumpus_dyn=true --verbose=false -e 10000 --runs=5
