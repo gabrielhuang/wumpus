@@ -399,19 +399,19 @@ if __name__ == "__main__":
     ]
 
     # Compare values of epsilon
-    # agents = [
-        # ('tp4.EpsilonGreedy({}, tp4.ABSF(n_flash))'.format(eps),
+#     agents = [
+        # ('tp4.EpsilonGreedy({}, tp4.XYBSF(grid_size, n_flash))'.format(eps),
          # 'XYBSF eps={}'.format(eps))
         # for eps in [0.01, 0.1, 0.2, 0.4, 0.6, 0.8]
-    # ] + [('Agent()', 'random')]
+#     ] + [('Agent()', 'random')]
 
     # Compare values of temperature
-  #   agents = [
-        # ('tp4.Softmax({}, tp4.BSF(n_flash))'.format(temp),
-         # 'BSF temp={}'.format(temp))
-        # #for temp in [0.1, 1, 10, 40]
-        # for temp in [10]
-  #   ] + [('Agent()', 'random')]
+#     agents = [
+        # ('tp4.Softmax({}, tp4.ABSF(n_flash))'.format(temp),
+         # 'ABSF temp={}'.format(temp))
+        # for temp in [0.1, 1, 10, 40]
+        # # for temp in [10]
+#     ] + [('Agent()', 'random')]
 
 #     # UCB - doesnt work
     # agents = [
