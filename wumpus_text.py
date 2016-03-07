@@ -20,8 +20,9 @@ CeCILL License
 
 created by Gaetan Marceau Caron   [01/02/2016]
 and updated by Guillaume Charpiat [24/02/2016]
+small modifications by Gabriel Huang [03/2016]
 
-Usage: wumpus [-i <flag>] [-t <flag>] [-w <flag>] [-v <flag>] [-d <flag>] [-g <size>] [-n <int>] [-e <int>]
+Usage: wumpus [-i <flag>] [-t <flag>] [-w <flag>] [-v <flag>] [-d <flag>] [-g <size>] [-n <int>] [-e <int>] [-r <int>]
 
 Options:
 -h --help      Show the description of the program
@@ -33,6 +34,7 @@ Options:
 -g <size> --grid_size <size>  an integer for the grid size [default: 4]
 -n <int> --n_flash <int>  an integer for the number of power units [default: 5]
 -e <int> --max_n_episode <int>  the maximum number of episode [default: 100]
+-r <int> --runs <int>   the number of runs over which to average [default: 1]
 """
 
 from __future__ import print_function
@@ -44,6 +46,7 @@ import numpy as np
 from time import sleep
 from enum import IntEnum, unique
 from docopt import docopt
+import matplotlib.pyplot as plt
 
 # All user defined agents
 import tp4
@@ -260,7 +263,6 @@ class WumpusTextHMI:
         self.loadImages()
         if (self.DISPLAY):
             self.displayWorld()
-        self.total_reward = 0.
 
     def loadImages(self):
         self.image_wumpus = 'W'
@@ -321,7 +323,6 @@ class WumpusTextHMI:
 
         self.time_step_ += 1
         self.cumul_reward_ += reward
-        self.total_reward += reward
         if(self.LOGGER_TIME_STEP):
             print("time step " + str(self.time_step_) + " : state " + str(prev_state) + " with " + str(a) + " ==> new state " + str(self.agent.getState()) + "; cumulated reward " + str(self.cumul_reward_))
 
@@ -351,7 +352,7 @@ class RLPlatform:
         self.reset()
         self.environment = Environment(self.agent,my_args)
         self.agent_prev_pos = self.agent.getPosition()
-        self.total_reward = 0.
+        self.all_rewards = []
 
     def reset(self):
         self.time_step_ = 0
@@ -365,7 +366,7 @@ class RLPlatform:
 
         self.time_step_ += 1
         self.cumul_reward_ += reward
-        self.total_reward += reward
+        self.all_rewards.append(reward)
         if(self.LOGGER_TIME_STEP):
             print("time step " + str(self.time_step_) + " " + str(prev_state) + " " + str(a) + " " + str(self.agent.getState()) + " " + str(self.cumul_reward_))
 
@@ -384,25 +385,76 @@ if __name__ == "__main__":
     print(my_args)
     grid_size = int(my_args['--grid_size'])
     n_flash = int(my_args['--n_flash'])
+    epsilon = 0.5
 
-    # Choose an encoding
-    encoding = tp4.BSF(n_flash)
-    # encoding = tp4.ABSF(n_flash)
-    #encoding = tp4.XYBSF(grid_size, n_flash)
 
-    # Choose an agent
-    # agent = Agent()
-    # agent = tp4.EngineeredAgent()
-    agent = tp4.EpsilonGreedy(0.5, encoding)
+    # Compare different representations
+    eps = 0.5
+    agents = [
+        ('Agent()', 'random'),
+        ('tp4.EngineeredAgent()', 'engineered'),
+        ('tp4.EpsilonGreedy(eps, tp4.BSF(n_flash))', 'BSF eps={}'.format(eps)),
+        ('tp4.EpsilonGreedy(eps, tp4.ABSF(n_flash))', 'ABSF eps={}'.format(eps)),
+        ('tp4.EpsilonGreedy(eps, tp4.XYBSF(grid_size, n_flash))', 'XYBSF eps={}'.format(eps))
+    ]
 
-    if my_args["--hmi"]=="True":
-        platform = WumpusTextHMI(agent, my_args)
-    else:
-        platform = RLPlatform(agent, my_args)
+    # Compare values of epsilon
+    # agents = [
+        # ('tp4.EpsilonGreedy({}, tp4.ABSF(n_flash))'.format(eps),
+         # 'XYBSF eps={}'.format(eps))
+        # for eps in [0.01, 0.1, 0.2, 0.4, 0.6, 0.8]
+    # ] + [('Agent()', 'random')]
 
-    for i in range(int(my_args["--max_n_episode"])):
-        platform.updateLoop()
+    # Compare values of temperature
+  #   agents = [
+        # ('tp4.Softmax({}, tp4.BSF(n_flash))'.format(temp),
+         # 'BSF temp={}'.format(temp))
+        # #for temp in [0.1, 1, 10, 40]
+        # for temp in [10]
+  #   ] + [('Agent()', 'random')]
 
-    print ('Average reward/step: {}'.format(platform.total_reward
-        / float(int(my_args["--max_n_episode"]))))
+#     # UCB - doesnt work
+    # agents = [
+        # ('tp4.UCB({}, tp4.BSF(n_flash))'.format(lbda),
+         # 'BSF lambda={}'.format(lbda))
+        # for lbda in np.logspace(-10, 10, 20)
+#     ] + [('Agent()', 'random')]
+
+
+    for agent_, name in agents:
+        runs_all_rewards = []
+        for run in xrange(int(my_args['--runs'])):
+            agent = eval(agent_)
+            if my_args["--hmi"]=="True":
+                platform = WumpusTextHMI(agent, my_args)
+            else:
+                platform = RLPlatform(agent, my_args)
+            for i in range(int(my_args["--max_n_episode"])):
+                platform.updateLoop()
+
+            print ('Average reward/step for "{}": {}'.format(
+                name,
+                np.mean(platform.all_rewards)))
+
+            runs_all_rewards.append(platform.all_rewards)
+
+        print ('"{}" over {} runs: {:.3f} +/- {:.3f}'.format(
+            name,
+            len(runs_all_rewards),
+            np.mean(runs_all_rewards),
+            np.std(np.mean(runs_all_rewards, axis=1))
+        ))
+
+        runs_all_rewards = np.asarray(runs_all_rewards)
+        # yerr = np.std(np.cumsum(runs_all_rewards, axis=1), axis=0)
+
+        #plt.plot(np.cumsum(np.mean(runs_all_rewards, axis=0)), label=name)
+        plt.errorbar(np.arange(len(runs_all_rewards[0])),
+                     np.cumsum(np.mean(runs_all_rewards, axis=0)),
+                     label=name)
+
+        plt.xlabel('steps')
+
+    plt.legend()
+    plt.show()
 

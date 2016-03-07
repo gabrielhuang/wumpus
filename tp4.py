@@ -176,11 +176,12 @@ def softmax(u):
 
 class Softmax(EpsilonGreedy):
     def __init__(self, temperature, encoding):
+        Agent.__init__(self)
+        EpsilonGreedy.reset(self)
         self.temperature = temperature
         self.encoding = encoding
         self.cum_rewards = np.zeros((np.prod(encoding.state_dims), len(Action)))  # q[s, a]
         self.n_visits = 1. * np.ones_like(self.cum_rewards)  # number of visits, 1 by default
-        Agent.__init__(self)
 
     def getActionReal(self):
         # sample
@@ -194,21 +195,23 @@ class Softmax(EpsilonGreedy):
 
 class UCB(EpsilonGreedy):
     def __init__(self, lbda, encoding):
+        Agent.__init__(self)
+        EpsilonGreedy.reset(self)
         self.lbda = lbda
         self.encoding = encoding
         self.cum_rewards = np.zeros((np.prod(encoding.state_dims), len(Action)))  # q[s, a]
-        self.n_visits = 0.001 * np.ones_like(self.cum_rewards)  # number of visits, 1 by default
-        Agent.__init__(self)
+        self.n_visits = 0 * np.ones_like(self.cum_rewards)  # number of visits, 1 by default
 
     def getActionReal(self):
         # sample
         state_id = self.encoding.get_state_id(self)
         q_s = self.cum_rewards[state_id] / self.n_visits[state_id]
         scores = q_s + self.lbda * np.sqrt(2 *
-                    np.log(self.n_visits[state_id].sum())/self.n_visits[state_id])
+                    np.log(1 + self.n_visits[state_id].sum())/(1 + self.n_visits[state_id]))
         action = Action(1 + np.argmax(scores))
         return action
 
     def nextState(self, s, reward):
-        EpsilonGreedy.nextState(self, s, reward)
+        scaled_reward = (float(reward) + 1) / 101  # reward must be between 0 and 1 for UCB
+        EpsilonGreedy.nextState(self, s, scaled_reward)
 
